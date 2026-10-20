@@ -7,6 +7,7 @@
 """
 
 import argparse
+import hashlib
 import json
 import secrets
 import socket
@@ -15,7 +16,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import macinput
 
@@ -24,6 +25,9 @@ WEB = ROOT / "web"
 STATE_DIR = Path.home() / ".tvbox"
 TOKEN_FILE = STATE_DIR / "token"
 TV_WINDOW_FILE = STATE_DIR / "chrome_window"
+WALLPAPER_DIR = Path.home() / "Pictures" / "TV Wallpapers"
+WALLPAPER_CACHE = STATE_DIR / "wallpaper-cache"
+WALLPAPER_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".tif", ".tiff"}
 
 # Browser shortcuts the remote's buttons map to (Chrome on macOS).
 SHORTCUTS = {
@@ -112,6 +116,27 @@ def volume(action=None):
     }
 
 
+def wallpapers():
+    WALLPAPER_DIR.mkdir(parents=True, exist_ok=True)
+    return sorted(p.name for p in WALLPAPER_DIR.iterdir()
+                  if p.is_file() and p.suffix.lower() in WALLPAPER_EXT and not p.name.startswith("."))
+
+
+def wallpaper_jpeg(name):
+    """A screen-sized JPEG of a wallpaper photo, converted once with sips (handles iPhone HEIC)."""
+    src = WALLPAPER_DIR / name
+    if src.parent != WALLPAPER_DIR or not src.is_file() or src.suffix.lower() not in WALLPAPER_EXT:
+        return None
+    st = src.stat()
+    key = hashlib.sha1(f"{name}:{st.st_mtime_ns}:{st.st_size}".encode()).hexdigest()[:20]
+    out = WALLPAPER_CACHE / f"{key}.jpg"
+    if not out.exists():
+        WALLPAPER_CACHE.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["sips", "-s", "format", "jpeg", "-s", "formatOptions", "85", "-Z", "3840",
+                        str(src), "--out", str(out)], capture_output=True, timeout=60)
+    return out.read_bytes() if out.exists() else None
+
+
 class Waker:
     """Wakes the display when the remote is used after a quiet spell."""
 
@@ -191,6 +216,16 @@ class Handler(BaseHTTPRequestHandler):
             self.file(path[1:], "image/png")
         elif path == "/sw.js":
             self.file("sw.js", "text/javascript")
+        elif path == "/api/wallpapers" or path.startswith("/wallpapers/"):
+            # Personal photos: only the TV screen on this Mac gets them.
+            if not self.is_local():
+                return self.send(403, {"error": "local only"})
+            if path == "/api/wallpapers":
+                return self.send(200, wallpapers())
+            data = wallpaper_jpeg(unquote(path[len("/wallpapers/"):]))
+            if data is None:
+                return self.send(404, {"error": "not found"})
+            self.send(200, data, "image/jpeg")
         elif path == "/api/pair":
             # Only the launcher running on this Mac may read the pairing link.
             if not self.is_local():
@@ -239,6 +274,8 @@ class Handler(BaseHTTPRequestHandler):
                 macinput.type_text(str(body["text"])[:500])
             elif cmd == "home":
                 chrome_open(f"http://localhost:{self.port}/tv")
+            elif cmd == "wallpaper":
+                chrome_open(f"http://localhost:{self.port}/tv#wallpaper")
             elif cmd == "open":
                 apps = json.loads((WEB / "apps.json").read_text())
                 app = next(a for a in apps if a["id"] == body["id"])

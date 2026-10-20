@@ -82,6 +82,41 @@
   .warn { color: #ffb454; }
   .hint { margin-left: auto; text-align: right; }
   [hidden] { display: none !important; }
+
+  /* Wallpaper mode */
+  #wall {
+    position: fixed; inset: 0; z-index: 10; background: #000; overflow: hidden;
+    opacity: 0; pointer-events: none; transition: opacity 1.2s ease;
+  }
+  #wall.on { opacity: 1; pointer-events: auto; cursor: none; }
+  #wall .layer {
+    position: absolute; inset: -2%;
+    background-size: cover; background-position: center;
+    opacity: 0; transition: opacity 2.5s ease;
+  }
+  #wall .layer.show { opacity: 1; }
+  #wall .layer.photo.show { animation: kenburns 45s ease-in-out both; }
+  #wall .layer.scene { background-size: 300% 300%; }
+  #wall .layer.scene.show { animation: drift 40s ease-in-out infinite alternate; }
+  @keyframes kenburns {
+    from { transform: scale(1) translate(0, 0); }
+    to   { transform: scale(1.1) translate(-1.5%, -1%); }
+  }
+  @keyframes drift {
+    from { background-position: 0% 30%; }
+    to   { background-position: 100% 70%; }
+  }
+  #wall .shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.55), transparent 45%); }
+  #wall .wclock {
+    position: absolute; left: 5vw; bottom: 7vh;
+    text-shadow: 0 2px 24px rgba(0,0,0,.5);
+    transition: transform 3s ease;
+  }
+  #wall .wtime { font-size: clamp(64px, 12vh, 200px); font-weight: 200; line-height: 1; font-variant-numeric: tabular-nums; }
+  #wall .wdate { font-size: clamp(18px, 2.6vh, 40px); opacity: .85; margin-top: .4em; }
+  @media (prefers-reduced-motion: reduce) {
+    #wall .layer.photo.show, #wall .layer.scene.show { animation: none; }
+  }
   kbd { background: var(--panel); border-radius: 6px; padding: 2px 8px; color: var(--text); font-family: inherit; }
 </style>
 </head>
@@ -109,6 +144,13 @@
     <div class="hint"><kbd>← ↑ → ↓</kbd> move &nbsp; <kbd>Enter</kbd> open</div>
   </footer>
 
+  <div id="wall" aria-hidden="true">
+    <div class="layer"></div>
+    <div class="layer"></div>
+    <div class="shade"></div>
+    <div class="wclock"><div class="wtime" id="wtime"></div><div class="wdate" id="wdate"></div></div>
+  </div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 const grid = document.getElementById('grid');
@@ -119,6 +161,8 @@ function tick() {
     now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   document.getElementById('date').textContent =
     now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+  document.getElementById('wtime').textContent = document.getElementById('clock').textContent;
+  document.getElementById('wdate').textContent = document.getElementById('date').textContent;
   const h = now.getHours();
   document.getElementById('greet').textContent =
     h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
@@ -150,6 +194,7 @@ function columns() {
   return tiles.filter(t => t.offsetTop === top).length || 1;
 }
 document.addEventListener('keydown', e => {
+  if (wallOn) { e.preventDefault(); exitWall(); return; }
   const tiles = [...grid.children];
   let i = tiles.indexOf(document.activeElement);
   if (i < 0) { tiles[0]?.focus(); return; }
@@ -175,8 +220,111 @@ async function loadPairing() {
   } catch (e) { /* not served by the local server */ }
 }
 
+// Wallpaper mode: photos from ~/Pictures/TV Wallpapers (or built-in colour scenes),
+// crossfading every 30s. Opens after a few idle minutes, or via /tv#wallpaper from the remote.
+const IDLE_MS = 5 * 60 * 1000;
+const SLIDE_MS = 30 * 1000;
+const SCENES = [
+  ['#0f2027', '#203a43', '#2c5364', '#0b0d12'],
+  ['#2b1055', '#7597de', '#0b0d12', '#2b1055'],
+  ['#3a1c71', '#d76d77', '#ffaf7b', '#3a1c71'],
+  ['#134e5e', '#71b280', '#0b2a2f', '#134e5e'],
+  ['#0f0c29', '#302b63', '#24243e', '#0f0c29'],
+  ['#42275a', '#734b6d', '#1c1c2e', '#42275a'],
+];
+const wall = document.getElementById('wall');
+const layers = [...wall.querySelectorAll('.layer')];
+let wallOn = false, slides = null, slide = 0, front = 0, slideTimer, idleTimer, driftTimer, wakeLock;
+
+async function loadSlides() {
+  let photos = [];
+  try {
+    const r = await fetch('/api/wallpapers');
+    if (r.ok) photos = await r.json();
+  } catch (e) {}
+  slides = photos.length
+    ? photos.map(n => ({ img: '/wallpapers/' + encodeURIComponent(n) }))
+    : SCENES.map(c => ({ scene: c }));
+  for (let i = slides.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [slides[i], slides[j]] = [slides[j], slides[i]];
+  }
+}
+
+function showSlide() {
+  const s = slides[slide++ % slides.length];
+  const next = layers[front ^ 1];
+  const reveal = () => {
+    next.className = 'layer ' + (s.img ? 'photo' : 'scene');
+    next.style.backgroundImage = s.img ? `url("${s.img}")` : `linear-gradient(120deg, ${s.scene.join(', ')})`;
+    void next.offsetWidth; // restart the zoom animation
+    next.classList.add('show');
+    layers[front].classList.remove('show');
+    front ^= 1;
+  };
+  if (!s.img) return reveal();
+  const im = new Image();
+  im.onload = reveal;
+  im.onerror = () => { slides = slides.filter(x => x !== s); if (slides.length) showSlide(); };
+  im.src = s.img;
+}
+
+function driftClock() {
+  // Nudge the clock a little every minute so it never burns into the screen.
+  const x = Math.random() * 4, y = Math.random() * 4;
+  wall.querySelector('.wclock').style.transform = `translate(${x}vw, ${-y}vh)`;
+}
+
+async function enterWall() {
+  if (wallOn) return;
+  wallOn = true;
+  clearTimeout(idleTimer);
+  if (!slides) await loadSlides();
+  wall.classList.add('on');
+  showSlide();
+  slideTimer = setInterval(showSlide, SLIDE_MS);
+  driftClock();
+  driftTimer = setInterval(driftClock, 60 * 1000);
+  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
+}
+
+function exitWall() {
+  if (!wallOn) return;
+  wallOn = false;
+  wall.classList.remove('on');
+  clearInterval(slideTimer);
+  clearInterval(driftTimer);
+  wakeLock?.release().catch(() => {});
+  wakeLock = null;
+  slides = null; // pick up new photos next time
+  if (location.hash === '#wallpaper') history.replaceState(null, '', '/tv');
+  (document.activeElement?.classList.contains('tile') ? document.activeElement : grid.children[0])?.focus();
+  resetIdle();
+}
+
+function resetIdle() {
+  clearTimeout(idleTimer);
+  if (!wallOn) idleTimer = setTimeout(enterWall, IDLE_MS);
+}
+
+let moved = 0;
+document.addEventListener('mousemove', e => {
+  if (!wallOn) return resetIdle();
+  moved += Math.abs(e.movementX) + Math.abs(e.movementY);
+  if (moved > 40) { moved = 0; exitWall(); }
+});
+['mousedown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, () => wallOn ? exitWall() : resetIdle()));
+document.addEventListener('keydown', () => { if (!wallOn) resetIdle(); }, true);
+document.addEventListener('visibilitychange', async () => {
+  if (wallOn && document.visibilityState === 'visible') {
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
+  }
+});
+window.addEventListener('hashchange', () => location.hash === '#wallpaper' ? enterWall() : exitWall());
+
 loadApps();
 loadPairing();
+if (location.hash === '#wallpaper') enterWall(); else resetIdle();
 </script>
 </body>
 </html>
