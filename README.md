@@ -79,3 +79,7 @@ The server listens on your local network. Commands require a random token (store
 - Netflix in Chrome on macOS is capped at 720p.
 - Monitors connected over HDMI often have no software volume control — use the monitor's or speaker's buttons.
 - The remote's keys go to whichever window is in front; press **Home** first to bring the TV window forward.
+
+## License
+
+[MIT](LICENSE)
