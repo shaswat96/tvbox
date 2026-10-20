@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0d12">
+<meta name="apple-mobile-web-app-title" content="TV Remote">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" id="manifest" href="/manifest.webmanifest">
+<title>TV Remote</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #161b26;
+    --panel-2: #1f2635;
+    --text: #f2f4f8;
+    --muted: #8a93a6;
+    --accent: #4f8cff;
+    --danger: #ff5d5d;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    padding: max(14px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
+    max-width: 480px;
+    margin: 0 auto;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+  button {
+    font: inherit; color: inherit; border: 0; background: var(--panel);
+    border-radius: 14px; padding: 14px 0; cursor: pointer;
+    transition: transform .06s, background .1s;
+  }
+  button:active, button.on { background: var(--panel-2); transform: scale(.96); }
+  .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .title { font-weight: 600; font-size: 17px; }
+  .status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: #3ad07a; } .dot.bad { background: var(--danger); }
+  .banner { background: #3a2a10; color: #ffcf8a; border-radius: 12px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
+
+  .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--panel); border-radius: 12px; padding: 4px; margin-bottom: 14px; }
+  .seg button { background: transparent; padding: 9px 0; border-radius: 9px; font-size: 14px; }
+  .seg button[aria-pressed="true"] { background: var(--panel-2); }
+
+  .pad { position: relative; width: min(78vw, 300px); aspect-ratio: 1; margin: 6px auto 16px; border-radius: 50%; background: var(--panel); }
+  .pad button { position: absolute; background: transparent; border-radius: 50%; font-size: 22px; color: var(--muted); }
+  .pad button:active { background: var(--panel-2); color: var(--text); }
+  .pad .up    { top: 4%;  left: 33%; width: 34%; height: 28%; }
+  .pad .down  { bottom: 4%; left: 33%; width: 34%; height: 28%; }
+  .pad .left  { left: 4%; top: 33%; width: 28%; height: 34%; }
+  .pad .right { right: 4%; top: 33%; width: 28%; height: 34%; }
+  .pad .ok { top: 31%; left: 31%; width: 38%; height: 38%; background: var(--panel-2); color: var(--text); font-size: 17px; font-weight: 600; }
+
+  .track {
+    height: min(52vh, 340px); border-radius: 20px; background: var(--panel);
+    display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center;
+    margin-bottom: 16px; touch-action: none; line-height: 1.6;
+  }
+  .track.active { background: var(--panel-2); }
+  .clicks { margin-top: -6px; margin-bottom: 16px; }
+  .clicks .wide { grid-column: span 2; }
+
+  .row { display: grid; gap: 10px; margin-bottom: 10px; }
+  .r3 { grid-template-columns: repeat(3, 1fr); }
+  .r4 { grid-template-columns: repeat(4, 1fr); }
+  .row button { font-size: 14px; }
+  .row button .i { display: block; font-size: 20px; margin-bottom: 2px; }
+  .vol-level { text-align: center; color: var(--muted); font-size: 12px; margin: -2px 0 12px; min-height: 1em; }
+
+  .typer { display: flex; gap: 8px; margin: 16px 0 10px; }
+  .typer input {
+    flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--text);
+    background: var(--panel); border: 1px solid transparent; border-radius: 12px; padding: 12px;
+    user-select: text; -webkit-user-select: text;
+  }
+  .typer input:focus { outline: none; border-color: var(--accent); }
+  .typer button { padding: 0 16px; background: var(--accent); color: #fff; font-weight: 600; }
+
+  h2 { font-size: 13px; color: var(--muted); font-weight: 500; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: .06em; }
+  .apps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .apps button { text-align: left; padding: 12px 14px; font-size: 14px; display: flex; align-items: center; gap: 10px; }
+  .apps .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="title">TV Remote</div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
+  </div>
+  <div class="banner" id="banner" hidden></div>
+
+  <div class="seg" role="group" aria-label="Control mode">
+    <button id="modePad" aria-pressed="true">D-pad</button>
+    <button id="modeTrack" aria-pressed="false">Trackpad</button>
+  </div>
+
+  <section id="padView">
+    <div class="pad">
+      <button class="up" data-key="up" aria-label="Up">▲</button>
+      <button class="left" data-key="left" aria-label="Left">◀</button>
+      <button class="ok" data-key="enter">OK</button>
+      <button class="right" data-key="right" aria-label="Right">▶</button>
+      <button class="down" data-key="down" aria-label="Down">▼</button>
+    </div>
+  </section>
+
+  <section id="trackView" hidden>
+    <div class="track" id="track">Drag to move · Tap to click<br>Two-finger drag to scroll · Two-finger tap = right-click</div>
+    <div class="row r3 clicks">
+      <button data-click="left" class="wide">Click</button>
+      <button data-click="right">Right-click</button>
+    </div>
+  </section>
+
+  <div class="row r4">
+    <button data-key="back"><span class="i">↩</span>Back</button>
+    <button data-cmd="home" title="Opens the TV home screen (starts Chrome if it's closed)"><span class="i">⌂</span>Home</button>
+    <button data-key="playpause"><span class="i">⏯</span>Play</button>
+    <button data-key="fullscreen"><span class="i">⛶</span>Full</button>
+  </div>
+  <div class="row r3">
+    <button data-vol="down"><span class="i">−</span>Vol</button>
+    <button data-vol="mute"><span class="i">🔇</span>Mute</button>
+    <button data-vol="up"><span class="i">+</span>Vol</button>
+  </div>
+  <div class="vol-level" id="volLevel"></div>
+  <div class="row r3">
+    <button data-key="esc">Esc</button>
+    <button data-key="backspace">⌫ Delete</button>
+    <button data-key="tab">Tab</button>
+  </div>
+
+  <form class="typer" id="typer">
+    <input id="text" placeholder="Type on TV (search, etc.)" autocomplete="off" autocapitalize="off" enterkeyhint="send">
+    <button type="submit">Send</button>
+  </form>
+
+  <h2>Apps</h2>
+  <div class="apps" id="apps"></div>
+
+<script>
+// Token comes from the QR link (?t=...) and is remembered on this phone.
+const params = new URLSearchParams(location.search);
+let token = params.get('t');
+try {
+  if (token) localStorage.setItem('tvbox.token', token);
+  else token = localStorage.getItem('tvbox.token');
+} catch (e) {}
+// Keep the token in the URL and the manifest: a home-screen app (especially on iPhone)
+// gets its own storage, so it must open with the token already in its start URL.
+if (token) {
+  if (!params.has('t')) history.replaceState(null, '', '/remote?t=' + encodeURIComponent(token));
+  document.getElementById('manifest').href ='/manifest.webmanifest?t=' + encodeURIComponent(token);
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+const $ = id => document.getElementById(id);
+function setStatus(ok, text) {
+  $('dot').className = 'dot ' + (ok ? 'ok' : 'bad');
+  $('statusText').textContent = text;
+}
+function banner(msg) { $('banner').textContent = msg || ''; $('banner').hidden = !msg; }
+function buzz() { navigator.vibrate?.(8); }
+
+async function send(body) {
+  try {
+    const r = await fetch('/api/cmd', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ t: token, ...body }),
+    });
+    const data = await r.json();
+    if (!r.ok) { setStatus(false, 'Error'); banner(data.error); return null; }
+    setStatus(true, 'Connected');
+    return data;
+  } catch (e) {
+    setStatus(false, 'Offline');
+    return null;
+  }
+}
+
+function showVolume(v) {
+  if (!v) return;
+  $('volLevel').textContent = v.level === null
+    ? 'This output has no software volume (use the monitor or speaker controls)'
+    : v.muted ? 'Muted' : `Volume ${v.level}%`;
+}
+
+// Buttons. Hold-to-repeat for arrows, volume and delete.
+const REPEAT = new Set(['up', 'down', 'left', 'right', 'backspace']);
+document.querySelectorAll('[data-key],[data-cmd],[data-vol]').forEach(b => {
+  let timer;
+  const fire = () => {
+    buzz();
+    if (b.dataset.key) send({ cmd: 'key', name: b.dataset.key });
+    else if (b.dataset.cmd) send({ cmd: b.dataset.cmd });
+    else send({ cmd: 'volume', action: b.dataset.vol }).then(d => d && showVolume(d.volume));
+  };
+  const repeats = REPEAT.has(b.dataset.key) || (b.dataset.vol && b.dataset.vol !== 'mute');
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    fire();
+    if (repeats) timer = setTimeout(function again() { fire(); timer = setTimeout(again, 120); }, 420);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(timer)));
+});
+
+// Mode switch.
+function mode(track) {
+  $('padView').hidden = track; $('trackView').hidden = !track;
+  $('modePad').setAttribute('aria-pressed', !track);
+  $('modeTrack').setAttribute('aria-pressed', track);
+  try { localStorage.setItem('tvbox.mode', track ? 'track' : 'pad'); } catch (e) {}
+}
+$('modePad').onclick = () => mode(false);
+$('modeTrack').onclick = () => mode(true);
+try { mode(localStorage.getItem('tvbox.mode') === 'track'); } catch (e) {}
+
+// Trackpad: batch moves every 30ms; quick touches count as clicks.
+const track = $('track');
+let acc = { dx: 0, dy: 0, sy: 0 }, last = null, start = null, moved = 0, fingers = 0;
+setInterval(() => {
+  if (acc.dx || acc.dy) { send({ cmd: 'move', dx: acc.dx.toFixed(1), dy: acc.dy.toFixed(1) }); }
+  if (acc.sy) { send({ cmd: 'scroll', dy: acc.sy.toFixed(0) }); }
+  acc = { dx: 0, dy: 0, sy: 0 };
+}, 30);
+function centroid(t) {
+  let x = 0, y = 0;
+  for (const p of t) { x += p.clientX; y += p.clientY; }
+  return { x: x / t.length, y: y / t.length };
+}
+track.addEventListener('touchstart', e => {
+  e.preventDefault();
+  fingers = Math.max(fingers, e.touches.length);
+  last = centroid(e.touches);
+  if (e.touches.length === 1) { start = Date.now(); moved = 0; fingers = 1; }
+  track.classList.add('active');
+}, { passive: false });
+track.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const c = centroid(e.touches);
+  const dx = c.x - last.x, dy = c.y - last.y;
+  last = c;
+  moved += Math.abs(dx) + Math.abs(dy);
+  if (e.touches.length >= 2) { acc.sy += dy * 3; return; }
+  const speed = Math.hypot(dx, dy);
+  const gain = 2.2 + Math.min(speed / 6, 4); // pointer acceleration for a big screen
+  acc.dx += dx * gain; acc.dy += dy * gain;
+}, { passive: false });
+track.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (e.touches.length) { last = centroid(e.touches); return; }
+  track.classList.remove('active');
+  if (Date.now() - start < 350 && moved < 16) {
+    buzz();
+    send({ cmd: 'click', button: fingers >= 2 ? 'right' : 'left' });
+  }
+  fingers = 0;
+}, { passive: false });
+document.querySelectorAll('[data-click]').forEach(b => b.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  buzz();
+  send({ cmd: 'click', button: b.dataset.click });
+}));
+// Desktop testing with a mouse.
+let mdown = false;
+track.addEventListener('mousedown', e => { mdown = true; start = Date.now(); moved = 0; });
+track.addEventListener('mousemove', e => { if (mdown) { acc.dx += e.movementX * 2; acc.dy += e.movementY * 2; moved += Math.abs(e.movementX) + Math.abs(e.movementY); } });
+track.addEventListener('mouseup', () => { mdown = false; if (Date.now() - start < 250 && moved < 6) send({ cmd: 'click' }); });
+
+// Typing.
+$('typer').addEventListener('submit', async e => {
+  e.preventDefault();
+  const text = $('text').value;
+  if (!text) { send({ cmd: 'key', name: 'enter' }); return; }
+  if (await send({ cmd: 'type', text })) $('text').value = '';
+});
+
+// App shortcuts.
+fetch('/apps.json').then(r => r.json()).then(apps => {
+  for (const app of apps) {
+    const b = document.createElement('button');
+    b.innerHTML = `<span class="sw" style="background:${app.color}"></span>`;
+    b.append(app.name);
+    b.onclick = () => { buzz(); send({ cmd: 'open', id: app.id }); };
+    $('apps').appendChild(b);
+  }
+});
+
+if (!token) {
+  setStatus(false, 'Not paired');
+  const installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  banner(installed
+    ? 'This home-screen icon was added before pairing. Delete it, scan the QR code on the TV, then Add to Home Screen again.'
+    : 'Scan the QR code on the TV home screen to pair this phone.');
+} else {
+  send({ cmd: 'status' }).then(d => {
+    if (!d) return;
+    showVolume(d.volume);
+    if (!d.trusted) banner('On the Mac, enable Accessibility for the TV Box server so buttons can press keys.');
+  });
+}
+</script>
+</body>
+</html>

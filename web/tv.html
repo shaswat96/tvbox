@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TV Home</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --bg-glow: #1a2238;
+    --text: #f2f4f8;
+    --muted: #8a93a6;
+    --focus: #ffffff;
+    --panel: #151a24;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(1200px 700px at 15% -10%, var(--bg-glow), transparent 70%), var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "SF Pro Display", system-ui, sans-serif;
+    overflow: hidden;
+    cursor: default;
+    display: flex;
+    flex-direction: column;
+    padding: 4vh 5vw;
+  }
+  header { display: flex; justify-content: space-between; align-items: baseline; }
+  .greet { font-size: clamp(28px, 3.2vh, 48px); font-weight: 600; letter-spacing: -0.01em; }
+  .date { color: var(--muted); font-size: clamp(16px, 1.9vh, 28px); margin-top: .4em; }
+  .clock { font-size: clamp(48px, 7vh, 110px); font-weight: 300; font-variant-numeric: tabular-nums; }
+
+  main { flex: 1; display: flex; align-items: center; }
+  .grid {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(clamp(220px, 15vw, 420px), 1fr));
+    gap: clamp(18px, 2.4vh, 40px);
+  }
+  .tile {
+    aspect-ratio: 16 / 9;
+    border-radius: 18px;
+    border: 0;
+    color: #fff;
+    font: inherit;
+    font-size: clamp(22px, 2.8vh, 42px);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 0.8em 0.9em;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+    filter: brightness(.82) saturate(.9);
+    outline: none;
+  }
+  .tile::before {
+    content: attr(data-mark);
+    position: absolute;
+    top: .25em; right: .35em;
+    font-size: 2.8em;
+    font-weight: 800;
+    opacity: .18;
+    line-height: 1;
+  }
+  .tile:focus {
+    transform: scale(1.07);
+    filter: none;
+    box-shadow: 0 0 0 4px var(--focus), 0 24px 60px rgba(0,0,0,.6);
+    z-index: 1;
+  }
+
+  footer { display: flex; align-items: center; gap: 24px; color: var(--muted); font-size: clamp(14px, 1.6vh, 22px); }
+  .pair { display: flex; align-items: center; gap: 20px; background: var(--panel); padding: 14px 20px 14px 14px; border-radius: 16px; }
+  #qr { background: #fff; padding: 8px; border-radius: 8px; line-height: 0; }
+  #qr img, #qr canvas { width: clamp(96px, 11vh, 160px) !important; height: auto !important; }
+  .pair b { color: var(--text); display: block; font-size: 1.15em; margin-bottom: .3em; }
+  .pair code { font-size: .85em; word-break: break-all; }
+  .warn { color: #ffb454; }
+  .hint { margin-left: auto; text-align: right; }
+  [hidden] { display: none !important; }
+  kbd { background: var(--panel); border-radius: 6px; padding: 2px 8px; color: var(--text); font-family: inherit; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="greet" id="greet">Hello</div>
+      <div class="date" id="date"></div>
+    </div>
+    <div class="clock" id="clock"></div>
+  </header>
+
+  <main><div class="grid" id="grid" role="list"></div></main>
+
+  <footer>
+    <div class="pair" id="pair" hidden>
+      <div id="qr"></div>
+      <div>
+        <b>Use your phone as the remote</b>
+        Scan with your phone camera (same Wi-Fi)<br>
+        <code id="pairUrl"></code>
+        <div class="warn" id="warn" hidden>Accessibility permission is off, so the remote can't press keys yet.</div>
+      </div>
+    </div>
+    <div class="hint"><kbd>← ↑ → ↓</kbd> move &nbsp; <kbd>Enter</kbd> open</div>
+  </footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const grid = document.getElementById('grid');
+
+function tick() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('date').textContent =
+    now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+  const h = now.getHours();
+  document.getElementById('greet').textContent =
+    h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+}
+tick();
+setInterval(tick, 10000);
+
+async function loadApps() {
+  const apps = await (await fetch('/apps.json')).json();
+  for (const app of apps) {
+    const t = document.createElement('button');
+    t.className = 'tile';
+    t.role = 'listitem';
+    t.textContent = app.name;
+    t.dataset.mark = app.name[0];
+    t.style.background = `linear-gradient(135deg, ${app.color}, #0b0d12 140%)`;
+    t.onclick = () => { location.href = app.url; };
+    grid.appendChild(t);
+  }
+  let last = 0;
+  try { last = +localStorage.getItem('tv.focus') || 0; } catch (e) {}
+  (grid.children[last] || grid.children[0])?.focus();
+}
+
+// Arrow-key navigation over the grid, so the phone's D-pad works here.
+function columns() {
+  const tiles = [...grid.children];
+  const top = tiles[0]?.offsetTop;
+  return tiles.filter(t => t.offsetTop === top).length || 1;
+}
+document.addEventListener('keydown', e => {
+  const tiles = [...grid.children];
+  let i = tiles.indexOf(document.activeElement);
+  if (i < 0) { tiles[0]?.focus(); return; }
+  const cols = columns();
+  const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
+  if (step === undefined) return;
+  e.preventDefault();
+  const next = Math.min(Math.max(i + step, 0), tiles.length - 1);
+  tiles[next].focus();
+  try { localStorage.setItem('tv.focus', next); } catch (err) {}
+});
+
+async function loadPairing() {
+  try {
+    const r = await fetch('/api/pair');
+    if (!r.ok) return;
+    const p = await r.json();
+    document.getElementById('pairUrl').textContent = p.url;
+    document.getElementById('warn').hidden = p.trusted;
+    if (window.QRCode) new QRCode(document.getElementById('qr'), { text: p.url, width: 320, height: 320 });
+    else document.getElementById('qr').hidden = true;
+    document.getElementById('pair').hidden = false;
+  } catch (e) { /* not served by the local server */ }
+}
+
+loadApps();
+loadPairing();
+</script>
+</body>
+</html>

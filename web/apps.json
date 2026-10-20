@@ -1,0 +1,10 @@
+[
+  {"id": "netflix",   "name": "Netflix",     "url": "https://www.netflix.com/browse",   "color": "#b20710"},
+  {"id": "hotstar",   "name": "JioHotstar",  "url": "https://www.hotstar.com/in",       "color": "#0c2a6b"},
+  {"id": "prime",     "name": "Prime Video", "url": "https://www.primevideo.com",       "color": "#0f79af"},
+  {"id": "youtube",   "name": "YouTube",     "url": "https://www.youtube.com",          "color": "#cc0000"},
+  {"id": "sonyliv",   "name": "Sony LIV",    "url": "https://www.sonyliv.com",          "color": "#3a2a66"},
+  {"id": "zee5",      "name": "ZEE5",        "url": "https://www.zee5.com",             "color": "#6b1a8a"},
+  {"id": "spotify",   "name": "Spotify",     "url": "https://open.spotify.com",         "color": "#1a7f45"},
+  {"id": "ytmusic",   "name": "YouTube Music","url": "https://music.youtube.com",       "color": "#7a1414"}
+]

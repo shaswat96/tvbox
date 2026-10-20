@@ -1,0 +1,81 @@
+# TV Box
+
+Turn a Mac mini and any monitor into a smart TV — with your phone as the remote.
+
+No streaming stick, no app store, no dependencies: a single Python file serves a TV-style home screen on the Mac and a remote control web app on your phone over Wi-Fi.
+
+<p align="center">
+  <img src="docs/tv.png" alt="TV home screen" width="72%">
+  &nbsp;
+  <img src="docs/remote.png" alt="Phone remote" width="22%">
+</p>
+
+## Features
+
+- **TV home screen** — full-screen launcher for Netflix, JioHotstar, Prime Video, YouTube and more, navigable with arrow keys.
+- **Phone remote** — D-pad, Back, Home, Play/Pause, Fullscreen, volume, and a keyboard for typing searches on the TV.
+- **Trackpad mode** — drag to move the pointer, tap to click, two-finger scroll, for sites that aren't keyboard-friendly.
+- **Installs like an app** — add the remote to your phone's home screen; it opens full-screen and already paired.
+- **Pair by QR code** — scan the code on the TV; only paired phones can control the Mac.
+- **Its own Chrome window** — the TV never takes over your normal browsing windows.
+- **Starts at login** — optional LaunchAgent, restarts itself if it crashes.
+
+## Requirements
+
+- macOS (tested on a Mac mini M4, macOS 26)
+- Python 3 (standard library only)
+- Google Chrome
+- Phone on the same Wi-Fi network
+
+## Setup
+
+```bash
+git clone https://github.com/shaswat96/tvbox.git
+cd tvbox
+./start.sh
+```
+
+This opens the TV home screen in Chrome. Scan the QR code with your phone to open the remote.
+
+**Grant Accessibility permission** so the remote can press keys and move the mouse:
+System Settings → Privacy & Security → Accessibility → enable the app running the server (Terminal if you used `start.sh`).
+
+### Start automatically at login
+
+```bash
+./install-autostart.sh
+```
+
+Then add the `Python.app` path the script prints to Accessibility (in the file picker, press <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd> and paste it). Remove with `./install-autostart.sh --remove`. Logs go to `~/.tvbox/server.log`.
+
+### Add the remote to your phone's home screen
+
+- **iPhone:** open the QR link in Safari → Share → Add to Home Screen.
+- **Android:** Chrome only installs full-screen web apps over HTTPS. Either use Add to Home screen as a shortcut, or enable `chrome://flags` → *Insecure origins treated as secure* for `http://<mac-ip>:8765`, then Install.
+
+Tip: reserve the Mac's IP address in your router so the home-screen icon keeps working.
+
+## Customising
+
+Edit [`web/apps.json`](web/apps.json) to change the tiles — each app is a name, URL and colour.
+
+## How it works
+
+| File | What it does |
+|---|---|
+| `server.py` | HTTP server: serves the pages, checks the pairing token, runs commands |
+| `macinput.py` | Posts real keyboard/mouse events through CoreGraphics via `ctypes` |
+| `web/tv.html` | TV home screen |
+| `web/remote.html` | Phone remote (installable web app) |
+
+Chrome is controlled with AppleScript, volume with `osascript`, and the display is woken with `caffeinate`.
+
+## Security
+
+The server listens on your local network. Commands require a random token (stored in `~/.tvbox/token`, never in the repo) that is only handed out to the TV screen on the Mac itself, via the QR code. Delete that file and restart to un-pair all phones. Don't expose port 8765 to the internet.
+
+## Limitations
+
+- Netflix in Chrome on macOS is capped at 720p.
+- Monitors connected over HDMI often have no software volume control — use the monitor's or speaker's buttons.
+- The remote's keys go to whichever window is in front; press **Home** first to bring the TV window forward.
