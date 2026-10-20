@@ -201,6 +201,18 @@ def wallpaper_jpeg(name):
     return out.read_bytes() if out.exists() else None
 
 
+def screen_locked():
+    """True while the macOS lock screen is up (the remote can't get past it, by design)."""
+    out = subprocess.run(["ioreg", "-n", "Root", "-d1"], capture_output=True, text=True).stdout
+    return '"CGSSessionScreenIsLocked"=Yes' in out.replace(" ", "")
+
+
+def lock_screen():
+    macinput.key("q", ["ctrl", "cmd"])  # the system Lock Screen shortcut
+    time.sleep(1.5)
+    subprocess.run(["pmset", "displaysleepnow"])
+
+
 class Waker:
     """Wakes the display when the remote is used after a quiet spell."""
 
@@ -357,6 +369,14 @@ class Handler(BaseHTTPRequestHandler):
             print(f"  cmd={cmd} {body.get('name') or body.get('button') or body.get('action') or ''}".rstrip(), flush=True)
         if cmd not in ("status", "volume"):
             self.waker.poke()
+        if cmd == "status":
+            return {"ok": True, "volume": volume(), "trusted": macinput.trusted(), "locked": screen_locked()}
+        if cmd == "lock":
+            lock_screen()
+            return {"ok": True, "locked": True}
+        # Anything that drives the screen is pointless (and blocked by macOS) at the lock screen.
+        if cmd not in ("move", "scroll", "volume") and screen_locked():
+            return {"ok": False, "locked": True}
         with self.input_lock:
             if cmd == "key":
                 name = body["name"]
@@ -382,8 +402,6 @@ class Handler(BaseHTTPRequestHandler):
                 chrome_open(app["url"])
             elif cmd == "volume":
                 return {"ok": True, "volume": volume(body.get("action"))}
-            elif cmd == "status":
-                return {"ok": True, "volume": volume(), "trusted": macinput.trusted()}
             else:
                 raise ValueError(cmd)
         return {"ok": True}

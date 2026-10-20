@@ -17,7 +17,8 @@ No streaming stick, no app store, no dependencies: a single Python file serves a
 - **Trackpad mode** — drag to move the pointer, tap to click, two-finger scroll, for sites that aren't keyboard-friendly.
 - **Installs like an app** — add the remote to your phone's home screen; it opens full-screen and already paired.
 - **Pair by QR code** — scan the code on the TV; only paired phones can control the Mac.
-- **Screensaver** — Apple TV's 4K landscape aerials (Yosemite, Iceland, Patagonia, Hawaii…) with a big clock and location caption, plus your own photos in between; starts after 5 idle minutes or from the remote, and keeps the screen awake.
+- **Screensaver** — Apple TV's 4K landscape aerials (Yosemite, Iceland, Patagonia, Hawaii…) with a big clock and location caption, plus your own photos in between; starts after 5 idle minutes or from the remote, then goes dark after 10 minutes so the Mac can lock.
+- **Lock from your phone** — lock the Mac and switch the screen off; the remote tells you when the Mac is locked.
 - **Its own Chrome window** — the TV never takes over your normal browsing windows.
 - **Starts at login** — optional LaunchAgent, restarts itself if it crashes.
 
@@ -55,6 +56,12 @@ Then add the `Python.app` path the script prints to Accessibility (in the file p
 - **Android:** Chrome only installs full-screen web apps over HTTPS. Either use Add to Home screen as a shortcut, or enable `chrome://flags` → *Insecure origins treated as secure* for `http://<mac-ip>:8765`, then Install.
 
 Tip: reserve the Mac's IP address in your router so the home-screen icon keeps working.
+
+### Locking and sleep
+
+TV Box works with macOS's normal lock: when the display turns off, the Mac locks per *System Settings → Lock Screen*. The phone **can lock** the Mac but **can't unlock** it. macOS blocks synthetic input on the lock screen, so unlock with the keyboard, Touch ID or an Apple Watch.
+
+If the Mac goes to full sleep, the server sleeps too and the remote shows *Offline*. To keep the remote working while the display is off, turn on *System Settings → Energy → Prevent automatic sleeping when the display is off*. A Mac mini idles at a few watts.
 
 ## Customising
 

@@ -50,7 +50,7 @@ SOURCE = cg.CGEventSourceCreate(1)  # kCGEventSourceStateHIDSystemState
 KEYS = {
     "up": 126, "down": 125, "left": 123, "right": 124,
     "enter": 36, "esc": 53, "space": 49, "tab": 48, "backspace": 51,
-    "f": 3, "j": 38, "k": 40, "l": 37, "m": 46, "w": 13, "[": 33, "]": 30,
+    "f": 3, "j": 38, "k": 40, "l": 37, "m": 46, "q": 12, "w": 13, "[": 33, "]": 30,
 }
 MODS = {"shift": 1 << 17, "ctrl": 1 << 18, "alt": 1 << 19, "cmd": 1 << 20}
 

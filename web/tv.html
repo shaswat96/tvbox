@@ -115,6 +115,7 @@
   #wall .wtime { font-size: clamp(64px, 12vh, 200px); font-weight: 200; line-height: 1; font-variant-numeric: tabular-nums; }
   #wall .wdate { font-size: clamp(18px, 2.6vh, 40px); opacity: .85; margin-top: .4em; }
   #wall .wcap { font-size: clamp(14px, 1.8vh, 26px); opacity: .7; margin-top: .6em; letter-spacing: .02em; }
+  #wall.done .wclock, #wall.done .shade { display: none; }
   #wall .layer video { width: 100%; height: 100%; object-fit: cover; display: block; }
   @media (prefers-reduced-motion: reduce) {
     #wall .layer.photo.show, #wall .layer.scene.show { animation: none; }
@@ -229,6 +230,7 @@ const IDLE_MS = 5 * 60 * 1000;
 const SLIDE_MS = 30 * 1000;      // how long a photo stays up
 const VIDEO_MAX_MS = 6 * 60 * 1000;
 const VIDEO_START_MS = 25 * 1000; // give up on a video that hasn't started by then
+const WALL_MAX_MS = 10 * 60 * 1000; // then go dark so the display can sleep and the Mac lock
 const SCENES = [
   ['#0f2027', '#203a43', '#2c5364', '#0b0d12'],
   ['#2b1055', '#7597de', '#0b0d12', '#2b1055'],
@@ -239,7 +241,7 @@ const SCENES = [
 ];
 const wall = document.getElementById('wall');
 const layers = [...wall.querySelectorAll('.layer')];
-let wallOn = false, slides = null, slide = 0, front = 0, slideTimer, idleTimer, driftTimer, wakeLock;
+let wallOn = false, slides = null, slide = 0, front = 0, slideTimer, idleTimer, driftTimer, endTimer;
 let sources = null, videosBroken = false, loadToken = 0;
 
 function shuffle(a) {
@@ -376,19 +378,30 @@ async function enterWall() {
   showSlide();
   driftClock();
   driftTimer = setInterval(driftClock, 60 * 1000);
-  try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
+  endTimer = setTimeout(endWall, WALL_MAX_MS);
+}
+
+function endWall() {
+  // Screensaver has run its course: go dark and stop streaming, so macOS can turn the
+  // display off and lock on its usual schedule. Any input still brings back the home screen.
+  if (!wallOn) return;
+  report('screensaver finished, going dark so the display can sleep and lock');
+  clearTimeout(slideTimer);
+  clearInterval(driftTimer);
+  loadToken++;
+  layers.forEach(l => { l.classList.remove('show'); clearLayer(l); });
+  wall.classList.add('done');
 }
 
 function exitWall() {
   if (!wallOn) return;
   wallOn = false;
-  wall.classList.remove('on');
+  wall.classList.remove('on', 'done');
   clearTimeout(slideTimer);
+  clearTimeout(endTimer);
   clearInterval(driftTimer);
   loadToken++;
   layers.forEach(l => { l.classList.remove('show'); clearLayer(l); });
-  wakeLock?.release().catch(() => {});
-  wakeLock = null;
   slides = sources = null; // pick up new photos next time
   if (location.hash === '#wallpaper') history.replaceState(null, '', '/tv');
   (document.activeElement?.classList.contains('tile') ? document.activeElement : grid.children[0])?.focus();
@@ -408,11 +421,6 @@ document.addEventListener('mousemove', e => {
 });
 ['mousedown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, () => wallOn ? exitWall() : resetIdle()));
 document.addEventListener('keydown', () => { if (!wallOn) resetIdle(); }, true);
-document.addEventListener('visibilitychange', async () => {
-  if (wallOn && document.visibilityState === 'visible') {
-    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) {}
-  }
-});
 window.addEventListener('hashchange', () => location.hash === '#wallpaper' ? enterWall() : exitWall());
 
 loadApps();

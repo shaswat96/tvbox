@@ -136,7 +136,7 @@
     <button data-cmd="wallpaper">Wallpaper</button>
     <button data-key="esc">Esc</button>
     <button data-key="backspace">⌫ Delete</button>
-    <button data-key="tab">Tab</button>
+    <button id="lock">🔒 Lock</button>
   </div>
 
   <form class="typer" id="typer">
@@ -179,7 +179,13 @@ async function send(body) {
     });
     const data = await r.json();
     if (!r.ok) { setStatus(false, 'Error'); banner(data.error); return null; }
-    setStatus(true, 'Connected');
+    if (data.locked) {
+      setStatus(false, 'Mac locked');
+      banner('The Mac is locked. Unlock it with its keyboard, Touch ID or Apple Watch, then the remote works again.');
+    } else {
+      setStatus(true, 'Connected');
+      if ($('banner').textContent.startsWith('The Mac is locked')) banner('');
+    }
     return data;
   } catch (e) {
     setStatus(false, 'Offline');
@@ -211,6 +217,13 @@ document.querySelectorAll('[data-key],[data-cmd],[data-vol]').forEach(b => {
     if (repeats) timer = setTimeout(function again() { fire(); timer = setTimeout(again, 120); }, 420);
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => clearTimeout(timer)));
+});
+
+$('lock').addEventListener('click', () => {
+  if (confirm('Lock the Mac and turn off the screen? You\'ll need its keyboard (or Apple Watch) to unlock.')) {
+    buzz();
+    send({ cmd: 'lock' });
+  }
 });
 
 // Mode switch.
@@ -302,11 +315,13 @@ if (!token) {
     ? 'This home-screen icon was added before pairing. Delete it, scan the QR code on the TV, then Add to Home Screen again.'
     : 'Scan the QR code on the TV home screen to pair this phone.');
 } else {
-  send({ cmd: 'status' }).then(d => {
+  const checkStatus = () => send({ cmd: 'status' }).then(d => {
     if (!d) return;
     showVolume(d.volume);
     if (!d.trusted) banner('On the Mac, enable Accessibility for the TV Box server so buttons can press keys.');
   });
+  checkStatus();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkStatus(); });
 }
 </script>
 </body>
