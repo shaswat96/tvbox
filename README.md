@@ -17,7 +17,7 @@ No streaming stick, no app store, no dependencies: a single Python file serves a
 - **Trackpad mode** — drag to move the pointer, tap to click, two-finger scroll, for sites that aren't keyboard-friendly.
 - **Installs like an app** — add the remote to your phone's home screen; it opens full-screen and already paired.
 - **Pair by QR code** — scan the code on the TV; only paired phones can control the Mac.
-- **Wallpaper mode** — ambient slideshow of your own photos (or built-in colour scenes) with a big clock; starts after 5 idle minutes or from the remote, and keeps the screen awake.
+- **Screensaver** — Apple TV's 4K landscape aerials (Yosemite, Iceland, Patagonia, Hawaii…) with a big clock and location caption, plus your own photos in between; starts after 5 idle minutes or from the remote, and keeps the screen awake.
 - **Its own Chrome window** — the TV never takes over your normal browsing windows.
 - **Starts at login** — optional LaunchAgent, restarts itself if it crashes.
 
@@ -60,7 +60,7 @@ Tip: reserve the Mac's IP address in your router so the home-screen icon keeps w
 
 Edit [`web/apps.json`](web/apps.json) to change the tiles — each app is a name, URL and colour.
 
-**Wallpapers:** drop photos into `~/Pictures/TV Wallpapers` (JPEG, PNG, WebP or iPhone HEIC — they're converted and resized automatically). With the folder empty, wallpaper mode shows animated colour scenes. Press any button on the remote to leave it. The idle delay and slide interval are `IDLE_MS` and `SLIDE_MS` at the bottom of [`web/tv.html`](web/tv.html).
+**Screensaver:** plays Apple's landscape aerial videos, streamed in 4K (about 15 Mbps) and relayed through the local server, because Chrome doesn't trust the certificate authority behind Apple's video CDN. If your Chrome can't decode 4K HEVC it switches to 1080p H.264. Drop your own photos into `~/Pictures/TV Wallpapers` (JPEG, PNG, WebP or iPhone HEIC, converted automatically) and they're shown between videos. If the aerials are unreachable it falls back to scenic photos of the day, and offline to animated colour scenes. Press any remote button to leave it. Change `AERIAL_CATEGORIES` in `server.py` to add cities, underwater or space aerials; the idle delay and photo interval are `IDLE_MS` and `SLIDE_MS` in [`web/tv.html`](web/tv.html).
 
 ## How it works
 

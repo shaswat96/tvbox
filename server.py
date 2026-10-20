@@ -8,15 +8,19 @@
 
 import argparse
 import hashlib
+import io
 import json
 import secrets
 import socket
 import subprocess
+import tarfile
 import threading
 import time
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import macinput
 
@@ -28,6 +32,12 @@ TV_WINDOW_FILE = STATE_DIR / "chrome_window"
 WALLPAPER_DIR = Path.home() / "Pictures" / "TV Wallpapers"
 WALLPAPER_CACHE = STATE_DIR / "wallpaper-cache"
 WALLPAPER_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".tif", ".tiff"}
+# Apple TV aerial screensaver catalog, streamed from Apple's CDN. Chrome doesn't trust the CA
+# behind sylvan.apple.com, so videos are relayed through this server (see proxy_aerial).
+AERIALS_CATALOG_URL = "https://sylvan.apple.com/Aerials/resources-16.tar"
+AERIALS_FILE = STATE_DIR / "aerials.json"
+AERIAL_CATEGORIES = {"AerialCategoryLandscapes"}  # also: Cities, Underwater, Space
+BING_URL = "https://www.bing.com/HPImageArchive.aspx?format=js&idx={idx}&n=8&mkt=en-IN"
 
 # Browser shortcuts the remote's buttons map to (Chrome on macOS).
 SHORTCUTS = {
@@ -120,6 +130,60 @@ def wallpapers():
     WALLPAPER_DIR.mkdir(parents=True, exist_ok=True)
     return sorted(p.name for p in WALLPAPER_DIR.iterdir()
                   if p.is_file() and p.suffix.lower() in WALLPAPER_EXT and not p.name.startswith("."))
+
+
+def refresh_aerials_catalog():
+    """Fetch Apple's aerial catalog (entries.json inside a tar) at most once a week."""
+    try:
+        if time.time() - AERIALS_FILE.stat().st_mtime < 7 * 86400:
+            return
+    except OSError:
+        pass
+    try:
+        with urllib.request.urlopen(AERIALS_CATALOG_URL, timeout=30) as r:
+            with tarfile.open(fileobj=io.BytesIO(r.read())) as tar:
+                entries = tar.extractfile("entries.json").read()
+        json.loads(entries)  # only keep it if it parses
+        AERIALS_FILE.write_bytes(entries)
+    except (OSError, ValueError, KeyError, tarfile.TarError):
+        pass  # keep whatever copy we had
+
+
+def aerial_videos():
+    """Landscape aerials: [{title, video (4K HEVC), fallback (1080p H.264)}], as local relay URLs."""
+    refresh_aerials_catalog()
+    try:
+        data = json.loads(AERIALS_FILE.read_text())
+    except (OSError, ValueError):
+        return []
+    wanted = {c["id"] for c in data.get("categories", []) if c.get("localizedNameKey") in AERIAL_CATEGORIES}
+    relay = lambda url: "/aerial?u=" + quote(url, safe="") if url else None
+    return [{"title": a.get("accessibilityLabel", ""),
+             "video": relay(a.get("url-4K-SDR") or a["url-1080-H264"]),
+             "fallback": relay(a["url-1080-H264"])}
+            for a in data.get("assets", [])
+            if a.get("url-1080-H264") and wanted & set(a.get("categories", []))
+            and a.get("includeInShuffle", True) is not False]
+
+
+_bing = {"at": 0.0, "photos": []}
+
+
+def scenic_photos():
+    """Bing's recent photos of the day (mostly landscapes), cached for six hours: [{title, img}]."""
+    if time.time() - _bing["at"] < 6 * 3600:
+        return _bing["photos"]
+    photos = []
+    for idx in (0, 8):
+        try:
+            with urllib.request.urlopen(BING_URL.format(idx=idx), timeout=8) as r:
+                for im in json.load(r).get("images", []):
+                    photos.append({"title": im.get("copyright", "").split(" (©")[0],
+                                   "img": f"https://www.bing.com{im['urlbase']}_UHD.jpg"})
+        except (OSError, ValueError, KeyError):
+            pass
+    _bing.update(at=time.time() if photos else 0.0, photos=photos)
+    return photos
 
 
 def wallpaper_jpeg(name):
@@ -216,12 +280,20 @@ class Handler(BaseHTTPRequestHandler):
             self.file(path[1:], "image/png")
         elif path == "/sw.js":
             self.file("sw.js", "text/javascript")
+        elif path == "/aerial":
+            if not self.is_local():
+                return self.send(403, {"error": "local only"})
+            self.proxy_aerial(parse_qs(urlparse(self.path).query).get("u", [""])[0])
         elif path == "/api/wallpapers" or path.startswith("/wallpapers/"):
             # Personal photos: only the TV screen on this Mac gets them.
             if not self.is_local():
                 return self.send(403, {"error": "local only"})
             if path == "/api/wallpapers":
-                return self.send(200, wallpapers())
+                return self.send(200, {
+                    "videos": aerial_videos(),
+                    "photos": [{"title": "", "img": "/wallpapers/" + quote(n)} for n in wallpapers()],
+                    "scenic": scenic_photos(),
+                })
             data = wallpaper_jpeg(unquote(path[len("/wallpapers/"):]))
             if data is None:
                 return self.send(404, {"error": "not found"})
@@ -237,7 +309,35 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.send(404, {"error": "not found"})
 
+    def proxy_aerial(self, url):
+        """Relay an aerial video from Apple's CDN, passing Range through so the browser can seek."""
+        if not url.startswith("https://sylvan.apple.com/"):
+            return self.send(403, {"error": "not an aerial"})
+        headers = {"Range": self.headers["Range"]} if self.headers.get("Range") else {}
+        try:
+            upstream = urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=20)
+        except urllib.error.HTTPError as e:
+            upstream = e
+        except OSError:
+            return self.send(502, {"error": "aerial unavailable"})
+        with upstream:
+            self.send_response(upstream.status)
+            for h in ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"):
+                if upstream.headers.get(h):
+                    self.send_header(h, upstream.headers[h])
+            self.end_headers()
+            try:
+                while chunk := upstream.read(256 * 1024):
+                    self.wfile.write(chunk)
+            except (BrokenPipeError, ConnectionResetError, TimeoutError):
+                pass  # the browser often drops a range request once it has what it needs
+
     def do_POST(self):
+        if urlparse(self.path).path == "/api/wallstatus" and self.is_local():
+            # The TV page reports what wallpaper mode is showing, for the log.
+            body = self.rfile.read(min(int(self.headers.get("Content-Length", 0)), 500))
+            print("  wallpaper:", body.decode(errors="replace"), flush=True)
+            return self.send(200, {"ok": True})
         if urlparse(self.path).path != "/api/cmd":
             return self.send(404, {"error": "not found"})
         try:
