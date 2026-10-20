@@ -19,14 +19,14 @@ No streaming stick, no app store, no dependencies: a single Python file serves a
 - **Pair by QR code** — scan the code on the TV; only paired phones can control the Mac.
 - **Screensaver** — Apple TV's 4K landscape aerials (Yosemite, Iceland, Patagonia, Hawaii…) with a big clock and location caption, plus your own photos in between; starts after 5 idle minutes or from the remote, then goes dark after 10 minutes so the Mac can lock.
 - **Lock from your phone** — lock the Mac and switch the screen off; the remote tells you when the Mac is locked.
-- **Its own Chrome window** — the TV never takes over your normal browsing windows.
+- **Runs in Safari** — the TV never takes over your everyday Chrome windows, and Netflix streams at higher resolution than in Chrome.
 - **Starts at login** — optional LaunchAgent, restarts itself if it crashes.
 
 ## Requirements
 
 - macOS (tested on a Mac mini M4, macOS 26)
 - Python 3 (standard library only)
-- Google Chrome
+- Safari (built in)
 - Phone on the same Wi-Fi network
 
 ## Setup
@@ -37,7 +37,7 @@ cd tvbox
 ./start.sh
 ```
 
-This opens the TV home screen in Chrome. Scan the QR code with your phone to open the remote.
+This opens the TV home screen in Safari. The first time, allow the prompt to let it control Safari. Scan the QR code with your phone to open the remote.
 
 **Grant Accessibility permission** so the remote can press keys and move the mouse:
 System Settings → Privacy & Security → Accessibility → enable the app running the server (Terminal if you used `start.sh`).
@@ -67,7 +67,7 @@ If the Mac goes to full sleep, the server sleeps too and the remote shows *Offli
 
 Edit [`web/apps.json`](web/apps.json) to change the tiles — each app is a name, URL and colour.
 
-**Screensaver:** plays Apple's landscape aerial videos, streamed in 4K (about 15 Mbps) and relayed through the local server, because Chrome doesn't trust the certificate authority behind Apple's video CDN. If your Chrome can't decode 4K HEVC it switches to 1080p H.264. Drop your own photos into `~/Pictures/TV Wallpapers` (JPEG, PNG, WebP or iPhone HEIC, converted automatically) and they're shown between videos. If the aerials are unreachable it falls back to scenic photos of the day, and offline to animated colour scenes. Press any remote button to leave it. Change `AERIAL_CATEGORIES` in `server.py` to add cities, underwater or space aerials; the idle delay and photo interval are `IDLE_MS` and `SLIDE_MS` in [`web/tv.html`](web/tv.html).
+**Screensaver:** plays Apple's landscape aerial videos, streamed in 4K (about 15 Mbps) and relayed through the local server so they play in any browser (Chrome, for one, doesn't trust the certificate authority behind Apple's video CDN). If the browser can't decode 4K HEVC it switches to 1080p H.264. Drop your own photos into `~/Pictures/TV Wallpapers` (JPEG, PNG, WebP or iPhone HEIC, converted automatically) and they're shown between videos. If the aerials are unreachable it falls back to scenic photos of the day, and offline to animated colour scenes. Press any remote button to leave it. Change `AERIAL_CATEGORIES` in `server.py` to add cities, underwater or space aerials; the idle delay and photo interval are `IDLE_MS` and `SLIDE_MS` in [`web/tv.html`](web/tv.html).
 
 ## How it works
 
@@ -78,7 +78,7 @@ Edit [`web/apps.json`](web/apps.json) to change the tiles — each app is a name
 | `web/tv.html` | TV home screen |
 | `web/remote.html` | Phone remote (installable web app) |
 
-Chrome is controlled with AppleScript, volume with `osascript`, and the display is woken with `caffeinate`.
+Safari is controlled with AppleScript, volume with `osascript`, and the display is woken with `caffeinate`.
 
 ## Security
 
@@ -86,7 +86,7 @@ The server listens on your local network. Commands require a random token (store
 
 ## Limitations
 
-- Netflix in Chrome on macOS is capped at 720p.
+- Netflix serves 4K only to 4K displays; on other monitors Safari gets up to 1080p (Chrome on macOS is capped at 720p).
 - Monitors connected over HDMI often have no software volume control — use the monitor's or speaker's buttons.
 - The remote's keys go to whichever window is in front; press **Home** first to bring the TV window forward.
 

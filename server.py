@@ -3,7 +3,7 @@
 
     python3 server.py [--port 8765] [--open]
 
---open launches the launcher in Chrome once the server is up.
+--open shows the launcher in Safari once the server is up.
 """
 
 import argparse
@@ -28,7 +28,6 @@ ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
 STATE_DIR = Path.home() / ".tvbox"
 TOKEN_FILE = STATE_DIR / "token"
-TV_WINDOW_FILE = STATE_DIR / "chrome_window"
 WALLPAPER_DIR = Path.home() / "Pictures" / "TV Wallpapers"
 WALLPAPER_CACHE = STATE_DIR / "wallpaper-cache"
 WALLPAPER_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif", ".tif", ".tiff"}
@@ -39,7 +38,7 @@ AERIALS_FILE = STATE_DIR / "aerials.json"
 AERIAL_CATEGORIES = {"AerialCategoryLandscapes"}  # also: Cities, Underwater, Space
 BING_URL = "https://www.bing.com/HPImageArchive.aspx?format=js&idx={idx}&n=8&mkt=en-IN"
 
-# Browser shortcuts the remote's buttons map to (Chrome on macOS).
+# Browser shortcuts the remote's buttons map to (Safari on macOS).
 SHORTCUTS = {
     "back": ("[", ["cmd"]),
     "forward": ("]", ["cmd"]),
@@ -75,34 +74,25 @@ def osascript(script, timeout=5):
     return r.stdout.strip()
 
 
-def chrome_open(url):
-    """Show url in TV Box's own Chrome window, full-screen, leaving other windows alone.
+def tv_open(url):
+    """Show url on the TV: Safari's front window, full-screen. Launches Safari if needed.
 
-    The window is remembered by Chrome's window id; if it was closed (or Chrome restarted)
-    a fresh one is made. Launches Chrome if it isn't running.
+    The TV uses Safari so it never mixes with your everyday Chrome windows (and Netflix
+    streams at higher resolution in Safari on a Mac).
     """
     url = url.replace('"', "%22")
-    try:
-        tv_id = int(TV_WINDOW_FILE.read_text())
-    except (OSError, ValueError):
-        tv_id = 0
-    new_id = osascript(f'''
-        tell application "Google Chrome"
-            try
-                set tvWindow to first window whose id is {tv_id}
-            on error
-                set tvWindow to make new window
-            end try
-            set URL of active tab of tvWindow to "{url}"
-            set index of tvWindow to 1
+    osascript(f'''
+        tell application "Safari"
             activate
-            return id of tvWindow
+            if (count of windows) = 0 then
+                make new document with properties {{URL:"{url}"}}
+            else
+                set URL of current tab of front window to "{url}"
+            end if
         end tell''', timeout=20)
-    if new_id.isdigit() and int(new_id) != tv_id:
-        TV_WINDOW_FILE.write_text(new_id)
     osascript('''
         delay 0.5
-        tell application "System Events" to tell process "Google Chrome"
+        tell application "System Events" to tell process "Safari"
             try
                 if value of attribute "AXFullScreen" of front window is false then ¬
                     set value of attribute "AXFullScreen" of front window to true
@@ -393,13 +383,13 @@ class Handler(BaseHTTPRequestHandler):
             elif cmd == "type":
                 macinput.type_text(str(body["text"])[:500])
             elif cmd == "home":
-                chrome_open(f"http://localhost:{self.port}/tv")
+                tv_open(f"http://localhost:{self.port}/tv")
             elif cmd == "wallpaper":
-                chrome_open(f"http://localhost:{self.port}/tv#wallpaper")
+                tv_open(f"http://localhost:{self.port}/tv#wallpaper")
             elif cmd == "open":
                 apps = json.loads((WEB / "apps.json").read_text())
                 app = next(a for a in apps if a["id"] == body["id"])
-                chrome_open(app["url"])
+                tv_open(app["url"])
             elif cmd == "volume":
                 return {"ok": True, "volume": volume(body.get("action"))}
             else:
@@ -410,7 +400,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--open", action="store_true", help="open the launcher in Chrome")
+    ap.add_argument("--open", action="store_true", help="open the launcher in Safari")
     args = ap.parse_args()
 
     Handler.token = load_token()
@@ -422,7 +412,7 @@ def main():
         print("! Accessibility permission missing: the remote can't press keys or move the mouse yet.")
         print("  System Settings > Privacy & Security > Accessibility > enable the app running this server.")
     if args.open:
-        threading.Timer(1.0, chrome_open, [f"http://localhost:{args.port}/tv"]).start()
+        threading.Timer(1.0, tv_open, [f"http://localhost:{args.port}/tv"]).start()
     server.serve_forever()
 
 
